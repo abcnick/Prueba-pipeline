@@ -1,0 +1,150 @@
+---
+- name: Deploy a java web app
+  hosts: localhost
+  become: yes
+  vars_prompt:
+   - name: "rama"
+     prompt: "Ingrese la rama a despegar"
+     private: no
+     default: master
+
+ 
+
+   - name: "version"
+     prompt: "ingrese la version"
+     private: no
+     default: v_0
+
+ 
+
+  tasks:
+   - name: git
+     git:
+       repo: https://github.com/abcnick/Prueba-pipeline.git
+       version: "{{ rama }}"
+       dest: /etc/ansible/archivos
+       key_file: /etc/ssh/accessazure
+       accept_hostkey: yes
+       force: yes
+
+ 
+
+
+   - name: install nodejs prerequisites
+     apt:
+       name:
+         - apt-transport-https
+         - gcc
+         - g++
+         - make
+       state: present
+
+ 
+
+
+   - name: install nodejs
+     apt:
+       name:
+         - nodejs
+         - npm
+         - build-essential
+       state: present
+
+ 
+
+
+   - name: Install Angular.js
+     npm:
+       name: angular
+       global: yes
+       state: present
+
+ 
+
+
+   - name: validacion pruebas unitarias
+     command: mvn clean test
+     register: info
+     args:
+       chdir: /etc/ansible/archivos/
+
+ 
+
+
+   - name: datos pruebas unitarias
+     debug: var=info.stdout
+
+ 
+
+
+   - name: sonarq
+     command: sh /etc/ansible/archivos/sonar.sh
+     args:
+       chdir: /etc/ansible/archivos/
+
+ 
+
+
+   - name: Compila aplicacion
+     command: mvn package
+     args:
+       chdir: /etc/ansible/archivos/
+
+ 
+
+
+   - name: renombrar archivo
+     command: mv helloworld.war helloworld{{ version }}.war
+     args:
+       chdir: /etc/ansible/archivos/target
+
+ 
+
+
+   - name: Copiar carpeta prod
+     when: rama == "master"
+     command: cp helloworld{{ version }}.war /home/desarrollo1/ansible-proyecto-prueba/compilados-war/prod
+     args:
+       chdir: /etc/ansible/archivos/target
+
+ 
+
+   - name: Copiar carpeta dev
+     when: rama == "develop"
+     command: cp helloworld{{ version }}.war /home/desarrollo1/ansible-proyecto-prueba/compilados-war/dev
+     args:
+       chdir: /etc/ansible/archivos/target
+
+ 
+
+   - name: Copiar carpeta qa
+     when: rama == "qa"
+     command: cp helloworld{{ version }}.war /home/desarrollo1/ansible-proyecto-prueba/compilados-war/qa
+     args:
+       chdir: /etc/ansible/archivos/target
+
+ 
+
+ 
+
+   - name: Deploy app prod
+     when: rama == "master"
+     command: docker cp helloworld{{ version }}.war e118a8f9c920:/opt/jboss/wildfly/standalone/deployments
+     args:
+       chdir: /home/desarrollo1/ansible-proyecto-prueba/compilados-war/prod
+
+ 
+
+   - name: Deploy app dev
+     when: rama == "develop"
+     command: docker cp helloworld{{ version }}.war e118a8f9c920:/opt/jboss/wildfly/standalone/deployments
+     args:
+       chdir: /home/desarrollo1/ansible-proyecto-prueba/compilados-war/dev
+
+ 
+
+   - name: Deploy app qa
+     when: rama == "qa"
+     command: docker cp helloworld{{ version }}.war e118a8f9c920:/opt/jboss/wildfly/standalone/deployments
+     args:
+       chdir: /home/desarrollo1/ansible-proyecto-prueba/compilados-war/qa
